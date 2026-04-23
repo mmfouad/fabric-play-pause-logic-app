@@ -2,6 +2,8 @@
 
 Running a Microsoft Fabric capacity 24/7 is a great way to impress your cloud bill — and nobody else. This project deploys two Azure Logic Apps that automatically **resume** your capacity every weekday morning and **suspend** it every evening, so you only pay for what you actually use.
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template)
+
 ---
 
 ## 📌 What It Does
