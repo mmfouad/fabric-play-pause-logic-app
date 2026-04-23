@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "12038975073026617366"
+      "templateHash": "14604628122286123177"
     }
   },
   "parameters": {
@@ -28,11 +28,20 @@
         "description": "Name of the existing Fabric capacity to manage"
       }
     },
-    "timeZone": {
-      "type": "string",
-      "defaultValue": "Eastern Standard Time",
+    "utcOffsetHours": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": -12,
+      "maxValue": 14,
       "metadata": {
-        "description": "Time zone for the schedule"
+        "description": "Your UTC offset in whole hours (e.g. -5 for Eastern, 0 for UTC, 1 for Central Europe, 8 for Singapore). Half-hour zones: use the nearest whole hour."
+      }
+    },
+    "fabricCapacityResourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Name of the resource group that contains the Fabric capacity (may differ from the deployment resource group)"
       }
     },
     "resumeHour": {
@@ -48,10 +57,62 @@
       "metadata": {
         "description": "Hour to suspend the capacity (24-hour format)"
       }
+    },
+    "runOnMonday": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Run schedule on Monday"
+      }
+    },
+    "runOnTuesday": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Run schedule on Tuesday"
+      }
+    },
+    "runOnWednesday": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Run schedule on Wednesday"
+      }
+    },
+    "runOnThursday": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Run schedule on Thursday"
+      }
+    },
+    "runOnFriday": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Run schedule on Friday"
+      }
+    },
+    "runOnSaturday": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Run schedule on Saturday"
+      }
+    },
+    "runOnSunday": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Run schedule on Sunday"
+      }
     }
   },
   "variables": {
-    "contributorRoleId": "b24988ac-6180-42a0-ab88-20f7382dd24c"
+    "contributorRoleId": "b24988ac-6180-42a0-ab88-20f7382dd24c",
+    "resumeHourUtc": "[mod(add(sub(parameters('resumeHour'), parameters('utcOffsetHours')), 48), 24)]",
+    "suspendHourUtc": "[mod(add(sub(parameters('suspendHour'), parameters('utcOffsetHours')), 48), 24)]",
+    "selectedWeekDays": "[concat(if(parameters('runOnMonday'), createArray('Monday'), createArray()), if(parameters('runOnTuesday'), createArray('Tuesday'), createArray()), if(parameters('runOnWednesday'), createArray('Wednesday'), createArray()), if(parameters('runOnThursday'), createArray('Thursday'), createArray()), if(parameters('runOnFriday'), createArray('Friday'), createArray()), if(parameters('runOnSaturday'), createArray('Saturday'), createArray()), if(parameters('runOnSunday'), createArray('Sunday'), createArray()))]"
   },
   "resources": [
     {
@@ -75,21 +136,15 @@
                 "frequency": "Week",
                 "interval": 1,
                 "schedule": {
-                  "weekDays": [
-                    "Monday",
-                    "Tuesday",
-                    "Wednesday",
-                    "Thursday",
-                    "Friday"
-                  ],
+                  "weekDays": "[variables('selectedWeekDays')]",
                   "hours": [
-                    "[parameters('resumeHour')]"
+                    "[variables('resumeHourUtc')]"
                   ],
                   "minutes": [
                     0
                   ]
                 },
-                "timeZone": "[parameters('timeZone')]"
+                "timeZone": "UTC"
               }
             }
           },
@@ -98,7 +153,7 @@
               "type": "Http",
               "inputs": {
                 "method": "GET",
-                "uri": "[format('https://management.azure.com{0}?api-version=2023-11-01', resourceId('Microsoft.Fabric/capacities', parameters('fabricCapacityName')))]",
+                "uri": "[format('https://management.azure.com{0}?api-version=2023-11-01', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('fabricCapacityResourceGroupName')), 'Microsoft.Fabric/capacities', parameters('fabricCapacityName')))]",
                 "authentication": {
                   "type": "ManagedServiceIdentity",
                   "audience": "https://management.azure.com"
@@ -123,7 +178,7 @@
                   "type": "Http",
                   "inputs": {
                     "method": "POST",
-                    "uri": "[format('https://management.azure.com{0}/resume?api-version=2023-11-01', resourceId('Microsoft.Fabric/capacities', parameters('fabricCapacityName')))]",
+                    "uri": "[format('https://management.azure.com{0}/resume?api-version=2023-11-01', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('fabricCapacityResourceGroupName')), 'Microsoft.Fabric/capacities', parameters('fabricCapacityName')))]",
                     "authentication": {
                       "type": "ManagedServiceIdentity",
                       "audience": "https://management.azure.com"
@@ -166,21 +221,15 @@
                 "frequency": "Week",
                 "interval": 1,
                 "schedule": {
-                  "weekDays": [
-                    "Monday",
-                    "Tuesday",
-                    "Wednesday",
-                    "Thursday",
-                    "Friday"
-                  ],
+                  "weekDays": "[variables('selectedWeekDays')]",
                   "hours": [
-                    "[parameters('suspendHour')]"
+                    "[variables('suspendHourUtc')]"
                   ],
                   "minutes": [
                     0
                   ]
                 },
-                "timeZone": "[parameters('timeZone')]"
+                "timeZone": "UTC"
               }
             }
           },
@@ -189,7 +238,7 @@
               "type": "Http",
               "inputs": {
                 "method": "GET",
-                "uri": "[format('https://management.azure.com{0}?api-version=2023-11-01', resourceId('Microsoft.Fabric/capacities', parameters('fabricCapacityName')))]",
+                "uri": "[format('https://management.azure.com{0}?api-version=2023-11-01', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('fabricCapacityResourceGroupName')), 'Microsoft.Fabric/capacities', parameters('fabricCapacityName')))]",
                 "authentication": {
                   "type": "ManagedServiceIdentity",
                   "audience": "https://management.azure.com"
@@ -214,7 +263,7 @@
                   "type": "Http",
                   "inputs": {
                     "method": "POST",
-                    "uri": "[format('https://management.azure.com{0}/suspend?api-version=2023-11-01', resourceId('Microsoft.Fabric/capacities', parameters('fabricCapacityName')))]",
+                    "uri": "[format('https://management.azure.com{0}/suspend?api-version=2023-11-01', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('fabricCapacityResourceGroupName')), 'Microsoft.Fabric/capacities', parameters('fabricCapacityName')))]",
                     "authentication": {
                       "type": "ManagedServiceIdentity",
                       "audience": "https://management.azure.com"
@@ -237,28 +286,158 @@
       }
     },
     {
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.Fabric/capacities', parameters('fabricCapacityName'))]",
-      "name": "[guid(resourceId('Microsoft.Fabric/capacities', parameters('fabricCapacityName')), resourceId('Microsoft.Logic/workflows', format('{0}-resume', parameters('namePrefix'))), variables('contributorRoleId'))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "resumeRoleAssignment",
+      "resourceGroup": "[parameters('fabricCapacityResourceGroupName')]",
       "properties": {
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('contributorRoleId'))]",
-        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', format('{0}-resume', parameters('namePrefix'))), '2019-05-01', 'full').identity.principalId]",
-        "principalType": "ServicePrincipal"
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "capacityName": {
+            "value": "[parameters('fabricCapacityName')]"
+          },
+          "principalId": {
+            "value": "[reference(resourceId('Microsoft.Logic/workflows', format('{0}-resume', parameters('namePrefix'))), '2019-05-01', 'full').identity.principalId]"
+          },
+          "roleDefinitionId": {
+            "value": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('contributorRoleId'))]"
+          },
+          "logicAppResourceId": {
+            "value": "[resourceId('Microsoft.Logic/workflows', format('{0}-resume', parameters('namePrefix')))]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.42.1.51946",
+              "templateHash": "13533890501309089578"
+            }
+          },
+          "parameters": {
+            "capacityName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the existing Fabric capacity to assign the role on"
+              }
+            },
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal ID of the Logic App managed identity"
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "Full resource ID of the role definition to assign"
+              }
+            },
+            "logicAppResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix to make the role assignment name deterministic"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Fabric/capacities', parameters('capacityName'))]",
+              "name": "[guid(resourceId('Microsoft.Fabric/capacities', parameters('capacityName')), parameters('logicAppResourceId'), parameters('roleDefinitionId'))]",
+              "properties": {
+                "roleDefinitionId": "[parameters('roleDefinitionId')]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal"
+              }
+            }
+          ]
+        }
       },
       "dependsOn": [
         "[resourceId('Microsoft.Logic/workflows', format('{0}-resume', parameters('namePrefix')))]"
       ]
     },
     {
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.Fabric/capacities', parameters('fabricCapacityName'))]",
-      "name": "[guid(resourceId('Microsoft.Fabric/capacities', parameters('fabricCapacityName')), resourceId('Microsoft.Logic/workflows', format('{0}-suspend', parameters('namePrefix'))), variables('contributorRoleId'))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "suspendRoleAssignment",
+      "resourceGroup": "[parameters('fabricCapacityResourceGroupName')]",
       "properties": {
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('contributorRoleId'))]",
-        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', format('{0}-suspend', parameters('namePrefix'))), '2019-05-01', 'full').identity.principalId]",
-        "principalType": "ServicePrincipal"
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "capacityName": {
+            "value": "[parameters('fabricCapacityName')]"
+          },
+          "principalId": {
+            "value": "[reference(resourceId('Microsoft.Logic/workflows', format('{0}-suspend', parameters('namePrefix'))), '2019-05-01', 'full').identity.principalId]"
+          },
+          "roleDefinitionId": {
+            "value": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('contributorRoleId'))]"
+          },
+          "logicAppResourceId": {
+            "value": "[resourceId('Microsoft.Logic/workflows', format('{0}-suspend', parameters('namePrefix')))]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.42.1.51946",
+              "templateHash": "13533890501309089578"
+            }
+          },
+          "parameters": {
+            "capacityName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the existing Fabric capacity to assign the role on"
+              }
+            },
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal ID of the Logic App managed identity"
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "Full resource ID of the role definition to assign"
+              }
+            },
+            "logicAppResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix to make the role assignment name deterministic"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Fabric/capacities', parameters('capacityName'))]",
+              "name": "[guid(resourceId('Microsoft.Fabric/capacities', parameters('capacityName')), parameters('logicAppResourceId'), parameters('roleDefinitionId'))]",
+              "properties": {
+                "roleDefinitionId": "[parameters('roleDefinitionId')]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal"
+              }
+            }
+          ]
+        }
       },
       "dependsOn": [
         "[resourceId('Microsoft.Logic/workflows', format('{0}-suspend', parameters('namePrefix')))]"

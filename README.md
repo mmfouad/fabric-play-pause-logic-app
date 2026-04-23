@@ -95,14 +95,23 @@ Open `main.bicepparam` and replace the placeholder values:
 ```bicep
 using './main.bicep'
 
-param namePrefix         = 'my-fabric'           // prefix for Logic App names
-param fabricCapacityName = 'my-capacity'          // name of your existing Fabric capacity
-param timeZone           = 'Eastern Standard Time'
-param resumeHour         = 8                      // 8 AM
-param suspendHour        = 17                     // 5 PM
+param namePrefix                      = 'my-fabric'   // prefix for Logic App resource names
+param fabricCapacityName              = 'my-capacity'  // name of your existing Fabric capacity
+param fabricCapacityResourceGroupName = 'Fabric'       // resource group that contains the capacity
+param utcOffsetHours                  = -5             // -5 = Eastern, 0 = UTC, 1 = CET, 8 = SGT
+param resumeHour                      = 8              // 8 AM local
+param suspendHour                     = 17             // 5 PM local
+param runOnMonday                     = true
+param runOnTuesday                    = true
+param runOnWednesday                  = true
+param runOnThursday                   = true
+param runOnFriday                     = true
+param runOnSaturday                   = false
+param runOnSunday                     = false
 ```
 
-> **Tip:** For a full list of valid Windows time zone names run `[System.TimeZoneInfo]::GetSystemTimeZones()` in PowerShell.
+> **Tip:** `utcOffsetHours` is your local offset from UTC as a whole number (e.g. `-5` for US Eastern, `+1` for Central Europe, `+8` for Singapore). Half-hour zones (India +5:30, Nepal +5:45) should round to the nearest hour.
+> **Important:** `fabricCapacityResourceGroupName` must point to the resource group that **contains** your Fabric capacity — it may differ from the resource group you deploy the Logic Apps into.
 
 ### Step 4 — Deploy to Azure
 

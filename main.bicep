@@ -7,8 +7,13 @@ param location string = resourceGroup().location
 @description('Name of the existing Fabric capacity to manage')
 param fabricCapacityName string
 
-@description('Time zone for the schedule')
-param timeZone string = 'Eastern Standard Time'
+@description('Your UTC offset in whole hours (e.g. -5 for Eastern, 0 for UTC, 1 for Central Europe, 8 for Singapore). Half-hour zones: use the nearest whole hour.')
+@minValue(-12)
+@maxValue(14)
+param utcOffsetHours int = 0
+
+@description('Name of the resource group that contains the Fabric capacity (may differ from the deployment resource group)')
+param fabricCapacityResourceGroupName string = resourceGroup().name
 
 @description('Hour to resume the capacity (24-hour format)')
 param resumeHour int = 8
@@ -16,12 +21,63 @@ param resumeHour int = 8
 @description('Hour to suspend the capacity (24-hour format)')
 param suspendHour int = 17
 
+@description('Run schedule on Monday')
+param runOnMonday bool = true
+
+@description('Run schedule on Tuesday')
+param runOnTuesday bool = true
+
+@description('Run schedule on Wednesday')
+param runOnWednesday bool = true
+
+@description('Run schedule on Thursday')
+param runOnThursday bool = true
+
+@description('Run schedule on Friday')
+param runOnFriday bool = true
+
+@description('Run schedule on Saturday')
+param runOnSaturday bool = false
+
+@description('Run schedule on Sunday')
+param runOnSunday bool = false
+
 // Built-in Contributor role definition ID
 var contributorRoleId = 'b24988ac-6180-42a0-ab88-20f7382dd24c'
 
-// Reference the existing Fabric capacity in the same resource group
+// Convert local hours to UTC by subtracting the offset.
+// +48 ensures the result is always positive before the modulo.
+var resumeHourUtc = (resumeHour - utcOffsetHours + 48) % 24
+var suspendHourUtc = (suspendHour - utcOffsetHours + 48) % 24
+
+var selectedWeekDays = concat(
+  runOnMonday ? [
+    'Monday'
+  ] : [],
+  runOnTuesday ? [
+    'Tuesday'
+  ] : [],
+  runOnWednesday ? [
+    'Wednesday'
+  ] : [],
+  runOnThursday ? [
+    'Thursday'
+  ] : [],
+  runOnFriday ? [
+    'Friday'
+  ] : [],
+  runOnSaturday ? [
+    'Saturday'
+  ] : [],
+  runOnSunday ? [
+    'Sunday'
+  ] : []
+)
+
+// Reference the existing Fabric capacity – supports cross-resource-group deployments
 resource fabricCapacity 'Microsoft.Fabric/capacities@2023-11-01' existing = {
   name: fabricCapacityName
+  scope: resourceGroup(fabricCapacityResourceGroupName)
 }
 
 // ---------------------------------------------------------------------------
@@ -46,21 +102,15 @@ resource resumeApp 'Microsoft.Logic/workflows@2019-05-01' = {
             frequency: 'Week'
             interval: 1
             schedule: {
-              weekDays: [
-                'Monday'
-                'Tuesday'
-                'Wednesday'
-                'Thursday'
-                'Friday'
-              ]
+              weekDays: selectedWeekDays
               hours: [
-                resumeHour
+                resumeHourUtc
               ]
               minutes: [
                 0
               ]
             }
-            timeZone: timeZone
+            timeZone: 'UTC'
           }
         }
       }
@@ -144,21 +194,15 @@ resource suspendApp 'Microsoft.Logic/workflows@2019-05-01' = {
             frequency: 'Week'
             interval: 1
             schedule: {
-              weekDays: [
-                'Monday'
-                'Tuesday'
-                'Wednesday'
-                'Thursday'
-                'Friday'
-              ]
+              weekDays: selectedWeekDays
               hours: [
-                suspendHour
+                suspendHourUtc
               ]
               minutes: [
                 0
               ]
             }
-            timeZone: timeZone
+            timeZone: 'UTC'
           }
         }
       }
@@ -216,26 +260,28 @@ resource suspendApp 'Microsoft.Logic/workflows@2019-05-01' = {
 }
 
 // ---------------------------------------------------------------------------
-// Role assignments – grant each Logic App's managed identity Contributor on
-// the Fabric capacity so it can call resume / suspend.
+// Role assignments – scoped to the resource group that owns the Fabric
+// capacity so they work even when the Logic Apps live in a different RG.
 // ---------------------------------------------------------------------------
-resource resumeRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(fabricCapacity.id, resumeApp.id, contributorRoleId)
-  scope: fabricCapacity
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
+module resumeRoleAssignment './modules/capacityRoleAssignment.bicep' = {
+  name: 'resumeRoleAssignment'
+  scope: resourceGroup(fabricCapacityResourceGroupName)
+  params: {
+    capacityName: fabricCapacityName
     principalId: resumeApp.identity.principalId
-    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
+    logicAppResourceId: resumeApp.id
   }
 }
 
-resource suspendRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(fabricCapacity.id, suspendApp.id, contributorRoleId)
-  scope: fabricCapacity
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
+module suspendRoleAssignment './modules/capacityRoleAssignment.bicep' = {
+  name: 'suspendRoleAssignment'
+  scope: resourceGroup(fabricCapacityResourceGroupName)
+  params: {
+    capacityName: fabricCapacityName
     principalId: suspendApp.identity.principalId
-    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
+    logicAppResourceId: suspendApp.id
   }
 }
 
